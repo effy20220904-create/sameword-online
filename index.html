@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>同词相遇-联机版</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui}
+body{max-width:600px;margin:40px auto;padding:0 20px}
+.box{border:1px solid #ddd;border-radius:12px;padding:20px;margin:10px 0}
+input{width:100%;padding:10px;font-size:16px;margin:6px 0}
+button{padding:10px 16px;font-size:16px;cursor:pointer;margin:4px}
+.info{margin:10px 0;color:#444}
+</style>
+</head>
+<body>
+<div class="box">
+<h3>同词相遇 联机版</h3>
+<div class="info">
+房间号：<input id="roomId" placeholder="输入/创建房间号，比如 abc123">
+<button onclick="joinRoom()">加入房间</button>
+</div>
+<div class="info">你的身份：<span id="role">未加入</span></div>
+<input id="wordInput" placeholder="输入你的词语">
+<button onclick="sendWord()">提交词语</button>
+<div class="info" id="status">等待对方...</div>
+<button onclick="resetRoom()">清空本轮</button>
+</div>
+
+<script>
+let rid = "";
+let role = null;
+const statusEl = document.getElementById("status");
+const roleEl = document.getElementById("role");
+
+async function joinRoom(){
+  rid = document.getElementById("roomId").value.trim();
+  if(!rid) return alert("填房间号");
+  // 先拉一次房间
+  const r = await fetch(`/api/room?roomId=${rid}`).then(d=>d.json());
+  if(!r.p1){
+    role = 1;
+    roleEl.innerText = "玩家1";
+  }else if(!r.p2){
+    role = 2;
+    roleEl.innerText = "玩家2";
+  }else{
+    alert("房间已满！");
+    return;
+  }
+  poll();
+}
+
+async function sendWord(){
+  const w = document.getElementById("wordInput").value.trim();
+  if(!w || !rid || !role) return;
+  await fetch("/api/room",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({roomId:rid, word:w, player:role})
+  })
+  document.getElementById("wordInput").value="";
+}
+
+async function poll(){
+  if(!rid) return;
+  const r = await fetch(`/api/room?roomId=${rid}`).then(d=>d.json());
+  if(r.p1 && r.p2){
+    if(r.p1 === r.p2){
+      statusEl.innerText = `✅ 撞上！双方词：${r.p1}`;
+    }else{
+      statusEl.innerText = `❌ 没撞上！P1:${r.p1} P2:${r.p2}，可以继续下一轮`;
+    }
+  }else if(r.p1){
+    statusEl.innerText = "玩家1已提交，等待玩家2";
+  }else if(r.p2){
+    statusEl.innerText = "玩家2已提交，等待玩家1";
+  }
+  setTimeout(poll,1500);
+}
+
+async function resetRoom(){
+  if(!rid) return;
+  await fetch("/api/room",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({roomId:rid, word:null, player:1})
+  })
+  await fetch("/api/room",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({roomId:rid, word:null, player:2})
+  })
+  statusEl.innerText="等待对方...";
+}
+</script>
+</body>
+</html>
